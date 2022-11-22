@@ -1,10 +1,15 @@
 #include <iostream>
 
+#include <boost/asio.hpp>
 #include <boost/program_options.hpp>
 
 #include "configuration/config.h"
+#include "exceptions/exceptions.h"
+#include "session_manager.h"
 
 namespace po = boost::program_options;
+using namespace loadbalancer;
+using namespace boost::asio;
 
 std::pair<po::options_description, po::positional_options_description> get_option_desc() {
     po::options_description generic("Generic Options");
@@ -47,6 +52,32 @@ std::pair<po::options_description, po::positional_options_description> get_optio
     return {all, hosts};
 }
 
+void init(const config::config_property &config) {
+
+}
+
+int start(const config::config_property &config) {
+
+    io_context context;
+
+    boost::system::error_code ec;
+    ip::address listen_addr = ip::address::from_string(config.server.bind_addr, ec);
+    if (ec) throw errors::config_error(ec.message());
+    ip::tcp::endpoint listen_endpoint(listen_addr, config.server.port);
+
+    session_manager manager(context, listen_endpoint, true, 50);
+    manager.start();
+
+    std::vector<std::thread> pool;
+    for (int i = 0; i < config.server.config.thread_count; ++i) {
+        pool.emplace_back([&]() { context.run(); });
+    }
+
+    for (auto &thread: pool) thread.join();
+
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     auto [all, hosts] = get_option_desc();
     try {
@@ -65,9 +96,15 @@ int main(int argc, char *argv[]) {
         }
         po::notify(vm); // raise exception for invalid argument
 
-        loadbalancer::config::config_property property; // load configuration
-        loadbalancer::config::load_yaml_file_config(property, vm["config-file"].as<std::string>());
-        loadbalancer::config::load_command_line_config(property, vm);
+        config::config_property property; // load configuration
+        config::load_yaml_file_config(property, vm["config-file"].as<std::string>());
+        config::load_command_line_config(property, vm);
+
+        BOOST_LOG_SEV(logger::slg, logger::notification)
+            << "Starting loadbalancer";
+
+        init(property);
+        return start(property);
 
     } catch (const po::error &err) {
         std::cout << "\nError when parsing commandline argument: "

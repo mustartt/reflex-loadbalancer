@@ -40,34 +40,38 @@ loadbalance_strategy parse_lb_strategy(const std::string &s) {
 void load_yaml_file_config(config_property &property, const std::string &file) {
     auto root = yaml::LoadFile(file);
 
-    property.server.bind_addr = root["server"]["bind_addr"].as<std::string>("0.0.0.0");
-    property.server.port = root["server"]["bind_addr"].as<uint16_t>(4000);
+    property.server.bind_addr = root["server"]["bind_addr"].as<std::string>();
+    property.server.port = boost::lexical_cast<uint16_t>(root["server"]["port"].as<int>());
 
-    property.server.config.maxconn
-        = root["server"]["config"]["maxconn"].as<uint32_t>(10000);
-    property.server.config.transfer_buffer_bytes
-        = root["server"]["config"]["transfer_buffer_bytes"].as<uint32_t>(4096);
-    property.server.config.socket_queue_depth_bytes
-        = root["server"]["config"]["socket_queue_depth_bytes"].as<uint32_t>(8192);
-    property.server.config.reuse_address
-        = root["server"]["config"]["reuse_address"].as<bool>(true);
-    property.server.config.thread_count
-        = root["server"]["config"]["thread_count"].as<uint32_t>(1);
+    property.server.config.maxconn = boost::lexical_cast<uint32_t>(
+        root["server"]["configs"]["maxconn"].as<int>()
+    );
+    property.server.config.transfer_buffer_bytes = boost::lexical_cast<uint32_t>(
+        root["server"]["configs"]["transfer_buffer_bytes"].as<int>()
+    );
+    property.server.config.socket_queue_depth_bytes = boost::lexical_cast<uint32_t>(
+        root["server"]["configs"]["socket_queue_depth_bytes"].as<int>()
+    );
+    property.server.config.reuse_address = root["server"]["configs"]["reuse_address"].as<bool>();
+    property.server.config.thread_count = boost::lexical_cast<uint32_t>(
+        root["server"]["configs"]["thread_count"].as<int>()
+    );
 
     property.server.log.log_file
-        = root["server"]["log"]["log_file"].as<std::string>("logs");
+        = root["server"]["logs"]["log_file"].as<std::string>();
     property.server.log.log_level
-        = parse_severity_level(root["server"]["log"]["log_level"].as<std::string>("info"));
-    property.server.log.rotate_bytes
-        = root["server"]["log"]["rotate_bytes"].as<uint32_t>(1048576);
+        = parse_severity_level(root["server"]["logs"]["log_level"].as<std::string>());
+    property.server.log.rotate_bytes = boost::lexical_cast<uint32_t>(
+        root["server"]["logs"]["rotate_bytes"].as<int>()
+    );
     property.server.log.rotate_duration
-        = root["server"]["log"]["rotate_duration"].as<std::string>("24h");
-    property.server.log.max_files
-        = root["server"]["log"]["max_files"].as<uint32_t>(10);
+        = root["server"]["logs"]["rotate_duration"].as<std::string>();
+    property.server.log.max_files = boost::lexical_cast<uint32_t>(
+        root["server"]["logs"]["max_files"].as<int>()
+    );
 
-    property.backend.strategy
-        = parse_lb_strategy(root["backend"]["strategy"].as<std::string>("roundrobin"));
-    property.backend.default_port = root["backend"]["default_port"].as<uint16_t>(8000);
+    property.backend.strategy = parse_lb_strategy(root["backend"]["strategy"].as<std::string>());
+    property.backend.default_port = boost::lexical_cast<uint16_t>(root["backend"]["default_port"].as<int>());
 
     const auto &member_node = root["backend"]["members"];
     if (!member_node.IsSequence()) throw errors::config_error("Invalid member property");

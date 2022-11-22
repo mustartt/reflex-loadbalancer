@@ -19,6 +19,6 @@ add_executable(loadbalancer
         src/connection.cpp
         include/logger/logger.h
         src/configuration/config.cpp
-        include/configuration/config.h src/logger/logger.cpp include/exceptions/exceptions.h)
+        include/configuration/config.h src/logger/logger.cpp include/exceptions/exceptions.h src/session_manager.cpp include/session_manager.h src/session.cpp include/session.h)
 
 target_link_libraries(loadbalancer ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES})
