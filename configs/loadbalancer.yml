@@ -6,7 +6,7 @@ server:
     transfer_buffer_bytes: 4096
     socket_queue_depth_bytes: 8192
     reuse_address: true
-    thread_count: 4
+    thread_count: 8
   logs:
     log_file: logs
     log_level: info

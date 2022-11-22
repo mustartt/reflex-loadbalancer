@@ -14,8 +14,9 @@ include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${YAML_CPP_INCLUDE_DIRS})
 include_directories(${INCLUDE_DIRECTORY})
 
-add_compile_options(-fsanitize=address)
-add_link_options(-fsanitize=address)
+set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-fsanitize=address -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 add_executable(loadbalancer
         main.cpp

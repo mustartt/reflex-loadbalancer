@@ -37,7 +37,7 @@ class session_manager {
 
     void report_stats();
 
-    std::string get_connections() const;
+    std::vector<std::string> get_connections() const;
   private:
     boost::uuids::random_generator gen_uuid;
 

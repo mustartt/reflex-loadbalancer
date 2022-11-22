@@ -15,7 +15,7 @@ namespace loadbalancer {
 
 class session_manager;
 
-class session {
+class session : public std::enable_shared_from_this<session> {
   public:
     using buffer_type = std::array<char, 4096>;
   public:

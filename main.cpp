@@ -65,15 +65,25 @@ int start(const config::config_property &config) {
     if (ec) throw errors::config_error(ec.message());
     ip::tcp::endpoint listen_endpoint(listen_addr, config.server.port);
 
-    session_manager manager(context, listen_endpoint, true, 10);
+    session_manager manager(context, listen_endpoint, true, 100);
     manager.start();
+
+    BOOST_LOG_SEV(logger::slg, logger::info)
+        << "Starting asio::io_context with "
+        << config.server.config.thread_count
+        << " threads";
 
     std::vector<std::thread> pool;
     for (int i = 0; i < config.server.config.thread_count; ++i) {
         pool.emplace_back([&]() { context.run(); });
     }
 
-    for (auto &thread: pool) thread.join();
+    BOOST_LOG_SEV(logger::slg, logger::info)
+        << "Started thread pool";
+
+    for (auto &thread: pool)
+        if (thread.joinable())
+            thread.join();
 
     return 0;
 }

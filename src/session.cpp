@@ -13,6 +13,8 @@ namespace loadbalancer {
 
 using namespace boost::asio;
 
+constexpr int temp_timeout = 30;
+
 session::session(session_manager *manager,
                  boost::uuids::uuid id,
                  io_context &context,
@@ -20,8 +22,8 @@ session::session(session_manager *manager,
     : manager(manager), id(id), strand(context),
       client(std::move(client)),
       member(client.get_executor()),
-      client_timeout(context, boost::posix_time::seconds(5)),
-      member_timeout(context, boost::posix_time::seconds(5)) {
+      client_timeout(context, boost::posix_time::seconds(temp_timeout)),
+      member_timeout(context, boost::posix_time::seconds(temp_timeout)) {
 
     BOOST_LOG_SEV(logger::slg, logger::info)
         << boost::uuids::to_string(id)
@@ -34,93 +36,95 @@ session::session(session_manager *manager,
 session::~session() {
     BOOST_LOG_SEV(logger::slg, logger::info)
         << boost::uuids::to_string(id)
-        << " - Connection Released @";
+        << " - ~Connection Released";
 }
 
 void session::connect_to_member(ip::tcp::endpoint &endpoint) {
     member.async_connect(
         endpoint,
-        [this](const boost::system::error_code &ec) {
-          if (ec) {
-              BOOST_LOG_SEV(logger::slg, logger::warning)
-                  << boost::uuids::to_string(id)
-                  << " - Failed to connect to pool member: "
-                  << ec.message();
-          } else {
-              BOOST_LOG_SEV(logger::slg, logger::info)
-                  << boost::uuids::to_string(id)
-                  << " - Backend Connection Established";
-              start_transfer();
-          }
+        [self = shared_from_this()](const boost::system::error_code &ec) {
+            if (ec) {
+                BOOST_LOG_SEV(logger::slg, logger::warning)
+                    << boost::uuids::to_string(self->id)
+                    << " - Failed to connect to pool member: "
+                    << ec.message();
+            } else {
+                BOOST_LOG_SEV(logger::slg, logger::info)
+                    << boost::uuids::to_string(self->id)
+                    << " - Backend Connection Established";
+                self->start_transfer();
+            }
         }
     );
 }
 
 void session::shutdown() {
-    post(strand,
-         [this]() {
-           boost::system::error_code ec;
-           if (client.is_open()) { client.shutdown(ip::tcp::socket::shutdown_both, ec); }
-           if (member.is_open()) { member.shutdown(ip::tcp::socket::shutdown_both, ec); }
-         }
-    );
+
 }
 
 void session::start_transfer() {
     read_from_client();
     read_from_server();
+
+    push_client_timeout_deadline();
+    push_member_timeout_deadline();
 }
 
 void session::close() {
     post(
         strand,
-        [this]() {
-          boost::system::error_code ec;
-          client.close(ec);
-          member.close(ec);
-          client_timeout.cancel(ec);
-          member_timeout.cancel(ec);
+        [self = shared_from_this()]() {
+            boost::system::error_code ec;
+            self->client.close(ec);
+            self->member.close(ec);
+            self->client_timeout.cancel(ec);
+            self->member_timeout.cancel(ec);
 
-          manager->release(id);
+            self->manager->release(self->id);
         }
     );
-
 }
 
 void session::push_client_timeout_deadline() {
-    client_timeout.expires_from_now(boost::posix_time::seconds(5));
-    client_timeout.async_wait([this](const boost::system::error_code &ec) {
-      if (ec) return;
-      BOOST_LOG_SEV(logger::slg, logger::info)
-          << boost::uuids::to_string(id)
-          << " - Client Connection Timed out "
-          << ec.message();
-      close();
-    });
+    client_timeout.expires_from_now(boost::posix_time::seconds(temp_timeout));
+    client_timeout.async_wait(
+        [self = shared_from_this()](const boost::system::error_code &ec) {
+            if (ec) return;
+
+            BOOST_LOG_SEV(logger::slg, logger::info)
+                << boost::uuids::to_string(self->id)
+                << " - Client Connection Timed out";
+
+            self->close();
+        }
+    );
 }
 
 void session::push_member_timeout_deadline() {
-    member_timeout.expires_from_now(boost::posix_time::seconds(5));
-    member_timeout.async_wait([this](const boost::system::error_code &ec) {
-      if (ec) return;
-      BOOST_LOG_SEV(logger::slg, logger::info)
-          << boost::uuids::to_string(id)
-          << " - Member Connection Timed out "
-          << ec.message();
-      close();
-    });
+    member_timeout.expires_from_now(boost::posix_time::seconds(temp_timeout));
+    member_timeout.async_wait(
+        [self = shared_from_this()](const boost::system::error_code &ec) {
+            if (ec) return;
+
+            BOOST_LOG_SEV(logger::slg, logger::info)
+                << boost::uuids::to_string(self->id)
+                << " - Member Connection Timed out ";
+
+            self->close();
+        }
+    );
 }
 
 void session::read_from_client() {
     client.async_read_some(
         buffer(*client_buffer),
-        [this](std::error_code ec, std::size_t n) {
-          if (!ec) {
-              push_client_timeout_deadline();
-              write_to_server(n);
-          } else {
-              close();
-          }
+        [self = shared_from_this()](std::error_code ec, std::size_t n) {
+            if (!ec) {
+                self->push_client_timeout_deadline();
+                self->write_to_server(n);
+            } else {
+                self->close();
+            }
         }
     );
 }
@@ -129,12 +133,12 @@ void session::write_to_server(std::size_t n) {
     async_write(
         member,
         buffer(*client_buffer, n),
-        [this](std::error_code ec, std::size_t _) {
-          if (!ec) {
-              read_from_client();
-          } else {
-              close();
-          }
+        [self = shared_from_this()](std::error_code ec, std::size_t _) {
+            if (!ec) {
+                self->read_from_client();
+            } else {
+                self->close();
+            }
         }
     );
 }
@@ -142,13 +146,13 @@ void session::write_to_server(std::size_t n) {
 void session::read_from_server() {
     member.async_read_some(
         buffer(*member_buffer),
-        [this](std::error_code ec, std::size_t n) {
-          if (!ec) {
-              push_member_timeout_deadline();
-              write_to_client(n);
-          } else {
-              close();
-          }
+        [self = shared_from_this()](std::error_code ec, std::size_t n) {
+            if (!ec) {
+                self->push_member_timeout_deadline();
+                self->write_to_client(n);
+            } else {
+                self->close();
+            }
         }
     );
 }
@@ -157,12 +161,12 @@ void session::write_to_client(std::size_t n) {
     async_write(
         client,
         buffer(*member_buffer, n),
-        [this](std::error_code ec, std::size_t _) {
-          if (!ec) {
-              read_from_server();
-          } else {
-              close();
-          }
+        [self = shared_from_this()](std::error_code ec, std::size_t _) {
+            if (!ec) {
+                self->read_from_server();
+            } else {
+                self->close();
+            }
         }
     );
 }
