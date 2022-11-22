@@ -65,7 +65,7 @@ int start(const config::config_property &config) {
     if (ec) throw errors::config_error(ec.message());
     ip::tcp::endpoint listen_endpoint(listen_addr, config.server.port);
 
-    session_manager manager(context, listen_endpoint, true, 50);
+    session_manager manager(context, listen_endpoint, true, 10);
     manager.start();
 
     std::vector<std::thread> pool;

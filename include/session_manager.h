@@ -13,22 +13,16 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/functional/hash.hpp>
 
-namespace loadbalancer {
+#include "session.h"
 
-class session;
+namespace loadbalancer {
 
 class session_manager {
   public:
     explicit session_manager(boost::asio::io_context &context,
                              boost::asio::ip::tcp::endpoint &endpoint,
                              bool reuse_address = true,
-                             size_t maxconn = 1000)
-        : max_session_count(maxconn), context(context), acceptor(context), gen_uuid() {
-        acceptor.open(endpoint.protocol());
-        acceptor.set_option(boost::asio::socket_base::reuse_address(reuse_address));
-        acceptor.bind(endpoint);
-        acceptor.listen();
-    }
+                             size_t maxconn = 1000);
     ~session_manager() = default;
 
     friend class session;
@@ -39,19 +33,20 @@ class session_manager {
   private:
     void listen();
     void release(boost::uuids::uuid conn_id);
+    void acquire(std::shared_ptr<session> &conn);
 
-    void acquire_conn(std::shared_ptr<session> &conn);
+    void report_stats();
 
     std::string get_connections() const;
   private:
     boost::uuids::random_generator gen_uuid;
 
-    std::mutex sessions_lock;
-    std::map<std::string, std::shared_ptr<session>> sessions;
-
     size_t max_session_count;
-    boost::asio::io_context::strand context;
+    std::map<boost::uuids::uuid, std::shared_ptr<session>> sessions{};
+
+    boost::asio::io_context::strand strand;
     boost::asio::ip::tcp::acceptor acceptor;
+    boost::asio::deadline_timer timer;
 };
 
 }

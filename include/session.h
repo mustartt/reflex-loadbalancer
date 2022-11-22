@@ -15,7 +15,7 @@ namespace loadbalancer {
 
 class session_manager;
 
-class session : public std::enable_shared_from_this<session> {
+class session {
   public:
     using buffer_type = std::array<char, 4096>;
   public:
@@ -30,22 +30,32 @@ class session : public std::enable_shared_from_this<session> {
 
     boost::uuids::uuid get_connection_id() const { return id; }
 
+    friend class session_manager;
   private:
     void start_transfer();
+    void close();
 
     void read_from_client();
     void write_to_server(std::size_t n);
     void read_from_server();
     void write_to_client(std::size_t n);
 
+    void push_client_timeout_deadline();
+    void push_member_timeout_deadline();
+
   private:
     session_manager *manager;
     boost::uuids::uuid id;
-    boost::asio::io_context::strand context;
+    boost::asio::io_context::strand strand;
+
     boost::asio::ip::tcp::socket client;
     boost::asio::ip::tcp::socket member;
+
     std::unique_ptr<buffer_type> client_buffer;
     std::unique_ptr<buffer_type> member_buffer;
+
+    boost::asio::deadline_timer client_timeout;
+    boost::asio::deadline_timer member_timeout;
 };
 
 } // loadbalancer

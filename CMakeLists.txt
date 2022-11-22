@@ -14,11 +14,20 @@ include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${YAML_CPP_INCLUDE_DIRS})
 include_directories(${INCLUDE_DIRECTORY})
 
+add_compile_options(-fsanitize=address)
+add_link_options(-fsanitize=address)
+
 add_executable(loadbalancer
         main.cpp
         src/connection.cpp
         include/logger/logger.h
         src/configuration/config.cpp
-        include/configuration/config.h src/logger/logger.cpp include/exceptions/exceptions.h src/session_manager.cpp include/session_manager.h src/session.cpp include/session.h)
+        include/configuration/config.h
+        src/logger/logger.cpp
+        include/exceptions/exceptions.h
+        src/session_manager.cpp
+        include/session_manager.h
+        src/session.cpp
+        include/session.h)
 
 target_link_libraries(loadbalancer ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES})
