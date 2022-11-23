@@ -59,7 +59,7 @@ void session::connect_to_member(ip::tcp::endpoint &endpoint) {
 }
 
 void session::shutdown() {
-
+    close(); // TODO: Temp implementation
 }
 
 void session::start_transfer() {

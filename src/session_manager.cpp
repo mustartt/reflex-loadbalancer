@@ -7,6 +7,7 @@
 #include "session.h"
 #include "session_manager.h"
 #include "logger/logger.h"
+#include "exceptions/exceptions.h"
 
 namespace loadbalancer {
 
@@ -20,7 +21,13 @@ session_manager::session_manager(io_context &context, ip::tcp::endpoint &endpoin
     acceptor.open(endpoint.protocol());
     acceptor.set_option(boost::asio::socket_base::reuse_address(reuse_address));
     acceptor.bind(endpoint);
-    acceptor.listen();
+    boost::system::error_code ec;
+    acceptor.listen(10000, ec);
+    if (ec) {
+        BOOST_LOG_SEV(logger::slg, logger::critical)
+            << "Session Manager cannot listen " << ec.message();
+        throw errors::config_error(ec.message());
+    }
 }
 
 void session_manager::start() {
@@ -33,26 +40,32 @@ void session_manager::report_stats() {
     timer.async_wait([this](const boost::system::error_code &ec) {
         if (ec) return;
         post(strand, [this]() {
-            std::string conns_list;
-            auto conns = get_connections();
-            if (!conns.empty()) {
-                conns_list += conns[0];
-                for (size_t i = 1; i < conns.size(); ++i) {
-                    conns_list += ", ";
-                    conns_list += conns[i];
-                }
-            }
+//            std::string conns_list;
+//            auto conns = get_connections();
+//            if (!conns.empty()) {
+//                conns_list += conns[0];
+//                for (size_t i = 1; i < conns.size(); ++i) {
+//                    conns_list += ", ";
+//                    conns_list += conns[i];
+//                }
+//            }
             BOOST_LOG_SEV(logger::slg, logger::info)
                 << "Current Connection Count: "
-                << sessions.size() << "/" << max_session_count
-                << " [ " << conns_list << "]";
+                << sessions.size() << "/" << max_session_count;
+//                << " [ " << conns_list << "]";
         });
         report_stats();
     });
 }
 
 void session_manager::drain() {
-
+    boost::system::error_code ec;
+    acceptor.close(ec);
+    post(strand, [this]() {
+        for (auto &[id, conn]: sessions) {
+            conn->shutdown();
+        }
+    });
 }
 
 void session_manager::listen() {
@@ -90,10 +103,6 @@ void session_manager::acquire(std::shared_ptr<session> &conn) {
 
 void session_manager::release(boost::uuids::uuid conn_id) {
     post(strand, [conn_id, this]() {
-        BOOST_LOG_SEV(logger::slg, logger::info)
-            << "Releasing Connection: "
-            << to_string(conn_id);
-
         bool hasCapacity = sessions.size() < max_session_count;
         sessions.erase(conn_id); // release session lifetime
         if (!hasCapacity && sessions.size() < max_session_count)

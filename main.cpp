@@ -65,7 +65,7 @@ int start(const config::config_property &config) {
     if (ec) throw errors::config_error(ec.message());
     ip::tcp::endpoint listen_endpoint(listen_addr, config.server.port);
 
-    session_manager manager(context, listen_endpoint, true, 100);
+    session_manager manager(context, listen_endpoint, true, config.server.config.maxconn);
     manager.start();
 
     BOOST_LOG_SEV(logger::slg, logger::info)
@@ -73,13 +73,34 @@ int start(const config::config_property &config) {
         << config.server.config.thread_count
         << " threads";
 
+    signal_set signals(context, SIGINT);
+    deadline_timer exit_timer(context);
+    signals.async_wait([&](const boost::system::error_code &ec, int signal_number) {
+        if (ec) {
+            BOOST_LOG_SEV(logger::slg, logger::error)
+                << "Signal Handler Error: " << ec.message();
+        } else {
+            BOOST_LOG_SEV(logger::slg, logger::info)
+                << "Received Signal: (" << signal_number << ") starting shutdown";
+            manager.drain();
+            exit_timer.expires_from_now(boost::posix_time::seconds(5));
+            exit_timer.async_wait([&](const boost::system::error_code &ec) {
+                if (!ec) context.stop();
+            });
+        }
+    });
+
     std::vector<std::thread> pool;
-    for (int i = 0; i < config.server.config.thread_count; ++i) {
+    for (size_t i = 0; i < config.server.config.thread_count; ++i) {
         pool.emplace_back([&]() { context.run(); });
     }
 
     BOOST_LOG_SEV(logger::slg, logger::info)
         << "Started thread pool";
+
+    exit_timer.async_wait([&](const boost::system::error_code &ec) {
+        context.stop();
+    });
 
     for (auto &thread: pool)
         if (thread.joinable())
@@ -111,7 +132,7 @@ int main(int argc, char *argv[]) {
         config::load_command_line_config(property, vm);
 
         BOOST_LOG_SEV(logger::slg, logger::notification)
-            << "Starting loadbalancer";
+            << "Starting loadbalancer" << socket_base::max_connections;
 
         init(property);
         return start(property);
