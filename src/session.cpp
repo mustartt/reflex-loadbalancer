@@ -133,7 +133,7 @@ void session::write_to_server(std::size_t n) {
     async_write(
         member,
         buffer(*client_buffer, n),
-        [self = shared_from_this()](std::error_code ec, std::size_t _) {
+        [self = shared_from_this()](std::error_code ec, std::size_t) {
             if (!ec) {
                 self->read_from_client();
             } else {
@@ -161,7 +161,7 @@ void session::write_to_client(std::size_t n) {
     async_write(
         client,
         buffer(*member_buffer, n),
-        [self = shared_from_this()](std::error_code ec, std::size_t _) {
+        [self = shared_from_this()](std::error_code ec, std::size_t) {
             if (!ec) {
                 self->read_from_server();
             } else {

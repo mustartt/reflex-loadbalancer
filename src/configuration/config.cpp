@@ -71,7 +71,6 @@ void load_yaml_file_config(config_property &property, const std::string &file) {
     );
 
     property.backend.strategy = parse_lb_strategy(root["backend"]["strategy"].as<std::string>());
-    property.backend.default_port = boost::lexical_cast<uint16_t>(root["backend"]["default_port"].as<int>());
 
     const auto &member_node = root["backend"]["members"];
     if (!member_node.IsSequence()) throw errors::config_error("Invalid member property");
@@ -86,10 +85,10 @@ void load_yaml_file_config(config_property &property, const std::string &file) {
                 try {
                     property.backend.members.emplace_back(name, boost::lexical_cast<std::uint16_t>(port));
                 } catch (const boost::bad_lexical_cast &exp) {
-                    throw errors::config_error("Cannot parse port: " + port);
+                    throw errors::config_error("Cannot parse port: " + host_string);
                 }
             } else {
-                property.backend.members.emplace_back(host_string, property.backend.default_port);
+                throw errors::config_error("Failed to parse port: " + host_string);
             }
         } catch (const yaml::Exception &exp) {
             throw errors::config_error("Failed to parse member");

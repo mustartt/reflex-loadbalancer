@@ -16,8 +16,7 @@ server:
 
 backend:
   strategy: roundrobin
-  default_port: 8000
   members:
-    - 0.0.0.0
+    - 0.0.0.0:8000
     - 0.0.0.0:8001
     - 0.0.0.0:8002

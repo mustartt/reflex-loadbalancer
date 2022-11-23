@@ -59,7 +59,6 @@ class config_property {
     class backend_property {
       public:
         loadbalance_strategy strategy;
-        uint16_t default_port;
         std::vector<host> members;
     };
   public:

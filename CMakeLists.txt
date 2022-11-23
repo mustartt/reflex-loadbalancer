@@ -30,6 +30,6 @@ add_executable(loadbalancer
         src/session_manager.cpp
         include/session_manager.h
         src/session.cpp
-        include/session.h)
+        include/session.h src/lb_strategy.cpp include/lb_strategy.h)
 
 target_link_libraries(loadbalancer ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES})
