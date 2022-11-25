@@ -6,9 +6,11 @@
 #include "configuration/config.h"
 #include "exceptions/exceptions.h"
 #include "session_manager.h"
+#include "lb_strategy.h"
+
+using namespace loadbalancer;
 
 namespace po = boost::program_options;
-using namespace loadbalancer;
 using namespace boost::asio;
 
 std::pair<po::options_description, po::positional_options_description> get_option_desc() {
@@ -52,8 +54,17 @@ std::pair<po::options_description, po::positional_options_description> get_optio
     return {all, hosts};
 }
 
-void init(const config::config_property &config) {
-
+void init(const config::config_property &) {
+//    std::map<int, bool> test{{1, false}, {2, false}, {3, false}, {4, false}, {5, false}};
+//    auto curr = test.cbegin();
+//    for (int i = 0; i < 50; ++i) {
+//        std::cout << "Before: " << (*curr).first << std::endl;
+//        ++curr;
+//        if (curr == test.cend()) {
+//            curr = test.cbegin();
+//        }
+//        std::cout << "After: " << (*curr).first << std::endl;
+//    }
 }
 
 int start(const config::config_property &config) {
@@ -64,6 +75,19 @@ int start(const config::config_property &config) {
     ip::address listen_addr = ip::address::from_string(config.server.bind_addr, ec);
     if (ec) throw errors::config_error(ec.message());
     ip::tcp::endpoint listen_endpoint(listen_addr, config.server.port);
+
+    backend_pool<ip::tcp::endpoint> backend_pool;
+    for (auto &member: config.backend.members) {
+        auto &endpoint = backend_pool.register_backend(member);
+        backend_pool.backend_up(endpoint);
+    }
+    auto strat = std::make_unique<lb_round_robin_strategy<ip::tcp::endpoint>>(backend_pool);
+    std::cout << strat->is_backend_alive() << std::endl;
+    std::cout << strat->next_backend() << std::endl;
+    std::cout << strat->next_backend() << std::endl;
+    std::cout << strat->next_backend() << std::endl;
+    std::cout << strat->next_backend() << std::endl;
+    std::cout << strat->next_backend() << std::endl;
 
     session_manager manager(context, listen_endpoint, true, config.server.config.maxconn);
     manager.start();
@@ -98,7 +122,7 @@ int start(const config::config_property &config) {
     BOOST_LOG_SEV(logger::slg, logger::info)
         << "Started thread pool";
 
-    exit_timer.async_wait([&](const boost::system::error_code &ec) {
+    exit_timer.async_wait([&](const boost::system::error_code &) {
         context.stop();
     });
 
@@ -132,7 +156,7 @@ int main(int argc, char *argv[]) {
         config::load_command_line_config(property, vm);
 
         BOOST_LOG_SEV(logger::slg, logger::notification)
-            << "Starting loadbalancer" << socket_base::max_connections;
+            << "Starting loadbalancer " << socket_base::max_connections;
 
         init(property);
         return start(property);
