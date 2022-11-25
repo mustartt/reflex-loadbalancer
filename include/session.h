@@ -41,7 +41,6 @@ class session : public std::enable_shared_from_this<session> {
     void write_to_client(std::size_t n);
 
     void push_client_timeout_deadline();
-    void push_member_timeout_deadline();
 
   private:
     session_manager *manager;
@@ -55,7 +54,6 @@ class session : public std::enable_shared_from_this<session> {
     std::unique_ptr<buffer_type> member_buffer;
 
     boost::asio::deadline_timer client_timeout;
-    boost::asio::deadline_timer member_timeout;
 };
 
 } // loadbalancer
