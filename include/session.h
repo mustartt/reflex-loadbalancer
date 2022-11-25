@@ -25,7 +25,7 @@ class session : public std::enable_shared_from_this<session> {
             boost::asio::ip::tcp::socket client);
     ~session();
   public:
-    void connect_to_member(boost::asio::ip::tcp::endpoint &endpoint);
+    void connect_to_member(const boost::asio::ip::tcp::endpoint &endpoint);
     void shutdown();
 
     boost::uuids::uuid get_connection_id() const { return id; }

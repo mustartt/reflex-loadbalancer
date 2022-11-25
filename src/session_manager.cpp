@@ -6,6 +6,7 @@
 
 #include "session.h"
 #include "session_manager.h"
+#include "lb_strategy.h"
 #include "logger/logger.h"
 #include "exceptions/exceptions.h"
 
@@ -14,9 +15,10 @@ namespace loadbalancer {
 using namespace boost::asio;
 
 session_manager::session_manager(io_context &context, ip::tcp::endpoint &endpoint,
+                                 lb_strategy<boost::asio::ip::tcp::endpoint> *strategy,
                                  bool reuse_address, size_t maxconn)
     : gen_uuid(), max_session_count(maxconn),
-      strand(context), acceptor(context),
+      strategy(strategy), strand(context), acceptor(context),
       timer(context, boost::posix_time::seconds(5)) {
     acceptor.open(endpoint.protocol());
     acceptor.set_option(boost::asio::socket_base::reuse_address(reuse_address));
@@ -40,31 +42,11 @@ void session_manager::report_stats() {
     timer.async_wait([this](const boost::system::error_code &ec) {
         if (ec) return;
         post(strand, [this]() {
-//            std::string conns_list;
-//            auto conns = get_connections();
-//            if (!conns.empty()) {
-//                conns_list += conns[0];
-//                for (size_t i = 1; i < conns.size(); ++i) {
-//                    conns_list += ", ";
-//                    conns_list += conns[i];
-//                }
-//            }
             BOOST_LOG_SEV(logger::slg, logger::info)
                 << "Current Connection Count: "
                 << sessions.size() << "/" << max_session_count;
-//                << " [ " << conns_list << "]";
         });
         report_stats();
-    });
-}
-
-void session_manager::drain() {
-    boost::system::error_code ec;
-    acceptor.close(ec);
-    post(strand, [this]() {
-        for (auto &[id, conn]: sessions) {
-            conn->shutdown();
-        }
     });
 }
 
@@ -79,18 +61,30 @@ void session_manager::listen() {
         [this](const boost::system::error_code &ec, ip::tcp::socket client) {
             auto conn_id = gen_uuid();
             if (!ec) {
-                auto target = ip::tcp::endpoint(ip::tcp::v4(), 8000);
-                auto conn = std::make_shared<session>(
-                    this, conn_id, strand.context(), std::move(client)
-                );
-                conn->connect_to_member(target);
-
-                acquire(conn);
+                if (!strategy->is_backend_alive()) {
+                    client.close();
+                } else {
+                    auto conn = std::make_shared<session>(
+                        this, conn_id, strand.context(), std::move(client)
+                    );
+                    conn->connect_to_member(strategy->next_backend());
+                    acquire(conn);
+                }
             } else {
                 listen();
             }
         }
     );
+}
+
+void session_manager::drain() {
+    boost::system::error_code ec;
+    acceptor.close(ec);
+    post(strand, [this]() {
+        for (auto &[id, conn]: sessions) {
+            conn->shutdown();
+        }
+    });
 }
 
 void session_manager::acquire(std::shared_ptr<session> &conn) {

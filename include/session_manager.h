@@ -17,10 +17,14 @@
 
 namespace loadbalancer {
 
+template<class T>
+class lb_strategy;
+
 class session_manager {
   public:
     explicit session_manager(boost::asio::io_context &context,
                              boost::asio::ip::tcp::endpoint &endpoint,
+                             lb_strategy<boost::asio::ip::tcp::endpoint> *strategy,
                              bool reuse_address = true,
                              size_t maxconn = 1000);
     ~session_manager() = default;
@@ -43,6 +47,7 @@ class session_manager {
 
     size_t max_session_count;
     std::map<boost::uuids::uuid, std::shared_ptr<session>> sessions{};
+    lb_strategy<boost::asio::ip::tcp::endpoint> *strategy;
 
     boost::asio::io_context::strand strand;
     boost::asio::ip::tcp::acceptor acceptor;

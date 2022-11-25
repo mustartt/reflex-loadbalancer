@@ -81,15 +81,15 @@ int start(const config::config_property &config) {
         auto &endpoint = backend_pool.register_backend(member);
         backend_pool.backend_up(endpoint);
     }
-    auto strat = std::make_unique<lb_round_robin_strategy<ip::tcp::endpoint>>(backend_pool);
-    std::cout << strat->is_backend_alive() << std::endl;
-    std::cout << strat->next_backend() << std::endl;
-    std::cout << strat->next_backend() << std::endl;
-    std::cout << strat->next_backend() << std::endl;
-    std::cout << strat->next_backend() << std::endl;
-    std::cout << strat->next_backend() << std::endl;
+    auto loadbalancer_strategy = std::make_unique<
+        lb_round_robin_strategy<ip::tcp::endpoint>
+    >(backend_pool);
 
-    session_manager manager(context, listen_endpoint, true, config.server.config.maxconn);
+    session_manager manager(
+        context, listen_endpoint,
+        loadbalancer_strategy.get(),
+        true, config.server.config.maxconn
+    );
     manager.start();
 
     BOOST_LOG_SEV(logger::slg, logger::info)

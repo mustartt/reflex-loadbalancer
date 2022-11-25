@@ -39,7 +39,7 @@ session::~session() {
         << " - ~Connection Released";
 }
 
-void session::connect_to_member(ip::tcp::endpoint &endpoint) {
+void session::connect_to_member(const ip::tcp::endpoint &endpoint) {
     member.async_connect(
         endpoint,
         [self = shared_from_this()](const boost::system::error_code &ec) {
