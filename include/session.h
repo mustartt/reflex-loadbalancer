@@ -45,10 +45,11 @@ class session : public std::enable_shared_from_this<session> {
   private:
     session_manager *manager;
     boost::uuids::uuid id;
-    boost::asio::io_context::strand strand;
 
     boost::asio::ip::tcp::socket client;
     boost::asio::ip::tcp::socket member;
+    boost::asio::io_context::strand strand_client;
+    boost::asio::io_context::strand strand_member;
 
     std::unique_ptr<buffer_type> client_buffer;
     std::unique_ptr<buffer_type> member_buffer;

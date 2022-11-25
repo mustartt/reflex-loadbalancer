@@ -19,9 +19,11 @@ session::session(session_manager *manager,
                  boost::uuids::uuid id,
                  io_context &context,
                  ip::tcp::socket client)
-    : manager(manager), id(id), strand(context),
+    : manager(manager), id(id),
       client(std::move(client)),
       member(client.get_executor()),
+      strand_client(context),
+      strand_member(context),
       client_timeout(context, boost::posix_time::seconds(temp_timeout)) {
 
     BOOST_LOG_SEV(logger::slg, logger::info)
@@ -70,7 +72,7 @@ void session::start_transfer() {
 
 void session::close() {
     post(
-        strand,
+        strand_client,
         [self = shared_from_this()]() {
             boost::system::error_code ec;
             self->client.close(ec);
@@ -86,7 +88,7 @@ void session::push_client_timeout_deadline() {
     client_timeout.expires_from_now(boost::posix_time::seconds(temp_timeout));
     client_timeout.async_wait(
         bind_executor(
-            strand,
+            strand_client,
             [self = shared_from_this()](const boost::system::error_code &ec) {
                 if (ec) return;
                 BOOST_LOG_SEV(logger::slg, logger::info)
@@ -102,15 +104,15 @@ void session::read_from_client() {
     client.async_read_some(
         buffer(*client_buffer),
         bind_executor(
-            strand,
-        [self = shared_from_this()](std::error_code ec, std::size_t n) {
-            if (!ec) {
-                self->push_client_timeout_deadline();
-                self->write_to_server(n);
-            } else {
-                self->close();
+            strand_client,
+            [self = shared_from_this()](std::error_code ec, std::size_t n) {
+                if (!ec) {
+                    self->push_client_timeout_deadline();
+                    self->write_to_server(n);
+                } else {
+                    self->close();
+                }
             }
-        }
         )
     );
 }
@@ -120,14 +122,14 @@ void session::write_to_server(std::size_t n) {
         member,
         buffer(*client_buffer, n),
         bind_executor(
-            strand,
-        [self = shared_from_this()](std::error_code ec, std::size_t) {
-            if (!ec) {
-                self->read_from_client();
-            } else {
-                self->close();
-            }
-        })
+            strand_member,
+            [self = shared_from_this()](std::error_code ec, std::size_t) {
+                if (!ec) {
+                    self->read_from_client();
+                } else {
+                    self->close();
+                }
+            })
     );
 }
 
@@ -135,15 +137,15 @@ void session::read_from_server() {
     member.async_read_some(
         buffer(*member_buffer),
         bind_executor(
-            strand,
-        [self = shared_from_this()](std::error_code ec, std::size_t n) {
-            if (!ec) {
-                self->push_client_timeout_deadline();
-                self->write_to_client(n);
-            } else {
-                self->close();
-            }
-        })
+            strand_client,
+            [self = shared_from_this()](std::error_code ec, std::size_t n) {
+                if (!ec) {
+                    self->push_client_timeout_deadline();
+                    self->write_to_client(n);
+                } else {
+                    self->close();
+                }
+            })
     );
 }
 
@@ -152,14 +154,14 @@ void session::write_to_client(std::size_t n) {
         client,
         buffer(*member_buffer, n),
         bind_executor(
-            strand,
-        [self = shared_from_this()](std::error_code ec, std::size_t) {
-            if (!ec) {
-                self->read_from_server();
-            } else {
-                self->close();
-            }
-        })
+            strand_member,
+            [self = shared_from_this()](std::error_code ec, std::size_t) {
+                if (!ec) {
+                    self->read_from_server();
+                } else {
+                    self->close();
+                }
+            })
     );
 }
 
