@@ -2,7 +2,8 @@ server:
   bind_addr: 0.0.0.0
   port: 4000
   configs:
-    maxconn: 500
+    maxconn: 10000
+    backlog: 1000
     transfer_buffer_bytes: 4096
     socket_queue_depth_bytes: 8192
     reuse_address: true
@@ -16,10 +17,6 @@ server:
 
 backend:
   strategy: roundrobin
+  timeout: 30
   members:
     - 0.0.0.0:8000
-#    - 0.0.0.0:8001
-#    - 0.0.0.0:8002
-#    - 0.0.0.0:8003
-#    - 0.0.0.0:8004
-#    - 0.0.0.0:8005

@@ -46,6 +46,9 @@ void load_yaml_file_config(config_property &property, const std::string &file) {
     property.server.config.maxconn = boost::lexical_cast<uint32_t>(
         root["server"]["configs"]["maxconn"].as<int>()
     );
+    property.server.config.backlog = boost::lexical_cast<uint32_t>(
+        root["server"]["configs"]["backlog"].as<int>()
+    );
     property.server.config.transfer_buffer_bytes = boost::lexical_cast<uint32_t>(
         root["server"]["configs"]["transfer_buffer_bytes"].as<int>()
     );
@@ -71,6 +74,7 @@ void load_yaml_file_config(config_property &property, const std::string &file) {
     );
 
     property.backend.strategy = parse_lb_strategy(root["backend"]["strategy"].as<std::string>());
+    property.backend.timeout = boost::lexical_cast<uint32_t>(root["backend"]["timeout"].as<int>());
 
     const auto &member_node = root["backend"]["members"];
     if (!member_node.IsSequence()) throw errors::config_error("Invalid member property");
@@ -101,6 +105,7 @@ void load_command_line_config(config_property &property, po::variables_map &vm) 
     if (vm.count("port")) property.server.port = vm["port"].as<uint16_t>();
 
     if (vm.count("maxconn")) property.server.config.maxconn = vm["maxconn"].as<uint32_t>();
+    if (vm.count("backlog")) property.server.config.backlog = vm["backlog"].as<uint32_t>();
     if (vm.count("transfer-buffer"))
         property.server.config.transfer_buffer_bytes = vm["transfer-buffer"].as<uint32_t>();
     if (vm.count("socket-queue-depth"))
@@ -116,6 +121,7 @@ void load_command_line_config(config_property &property, po::variables_map &vm) 
     if (vm.count("log-level")) property.server.log.log_level = parse_severity_level(vm["log-level"].as<std::string>());
 
     if (vm.count("strategy")) property.backend.strategy = parse_lb_strategy(vm["strategy"].as<std::string>());
+    if (vm.count("timeout")) property.backend.timeout = vm["timeout"].as<uint32_t>();
     if (vm.count("hosts")) {
         for (const auto &member: vm["hosts"].as<std::vector<std::string>>()) {
             try {

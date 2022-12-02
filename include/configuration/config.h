@@ -37,6 +37,7 @@ class config_property {
         class server_config_property {
           public:
             uint32_t maxconn;
+            uint32_t backlog;
             uint32_t transfer_buffer_bytes;
             uint32_t socket_queue_depth_bytes;
             bool reuse_address;
@@ -59,6 +60,7 @@ class config_property {
     class backend_property {
       public:
         loadbalance_strategy strategy;
+        uint32_t timeout;
         std::vector<host> members;
     };
   public:

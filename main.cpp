@@ -6,7 +6,9 @@
 #include "configuration/config.h"
 #include "exceptions/exceptions.h"
 #include "session_manager.h"
-#include "lb_strategy.h"
+#include "lb_strategy/lb_strategy.h"
+#include "lb_strategy/lb_round_robin_strategy.h"
+#include "sessions/tcp_session_factory.h"
 
 using namespace loadbalancer;
 
@@ -25,6 +27,7 @@ std::pair<po::options_description, po::positional_options_description> get_optio
         ("bind-addr,addr", po::value<std::string>(), "address to listen on")
         ("port,p", po::value<uint16_t>(), "port to listen on")
         ("maxconn,C", po::value<std::uint32_t>(), "maximum number of connections")
+        ("backlog", po::value<std::uint32_t>(), "maximum number queued connections")
         ("transfer-buffer", po::value<std::uint32_t>(), "transfer buffer size in bytes")
         ("socket-queue-depth", po::value<std::uint32_t>(), "socket queue depth in bytes")
         ("reuse-address", "allow address reuse")
@@ -41,6 +44,7 @@ std::pair<po::options_description, po::positional_options_description> get_optio
     po::options_description backend("Backend Configuration");
     backend.add_options()
         ("strategy", po::value<std::string>(), "load balance strategy")
+        ("timeout", po::value<std::uint32_t>(), "connection timeout")
         ("hosts", po::value<std::vector<std::string>>(), "list of host:port");
     po::positional_options_description hosts;
     hosts.add("hosts", -1);
@@ -74,22 +78,16 @@ int start(const config::config_property &config) {
     boost::system::error_code ec;
     ip::address listen_addr = ip::address::from_string(config.server.bind_addr, ec);
     if (ec) throw errors::config_error(ec.message());
-    ip::tcp::endpoint listen_endpoint(listen_addr, config.server.port);
 
-    backend_pool<ip::tcp::endpoint> backend_pool;
+    backend_pool backend_pool;
     for (auto &member: config.backend.members) {
         auto &endpoint = backend_pool.register_backend(member);
         backend_pool.backend_up(endpoint);
     }
-    auto loadbalancer_strategy = std::make_unique<
-        lb_round_robin_strategy<ip::tcp::endpoint>
-    >(backend_pool);
+    auto loadbalancer_strategy = std::make_unique<lb_round_robin_strategy>(backend_pool);
+    auto factory = std::make_unique<tcp_session_factory>(listen_addr, config.server.port, context, config);
 
-    session_manager manager(
-        context, listen_endpoint,
-        loadbalancer_strategy.get(),
-        true, config.server.config.maxconn
-    );
+    session_manager manager(context, loadbalancer_strategy.get(), factory.get(), config);
     manager.start();
 
     BOOST_LOG_SEV(logger::slg, logger::info)

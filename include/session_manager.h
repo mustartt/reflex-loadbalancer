@@ -13,44 +13,43 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/functional/hash.hpp>
 
-#include "session.h"
+#include "sessions/session.h"
+#include "configuration/config.h"
 
 namespace loadbalancer {
 
-template<class T>
 class lb_strategy;
+class session_factory;
 
 class session_manager {
   public:
     explicit session_manager(boost::asio::io_context &context,
-                             boost::asio::ip::tcp::endpoint &endpoint,
-                             lb_strategy<boost::asio::ip::tcp::endpoint> *strategy,
-                             bool reuse_address = true,
-                             size_t maxconn = 1000);
+                             lb_strategy *strategy,
+                             session_factory *factory,
+                             const config::config_property &property);
     ~session_manager() = default;
 
-    friend class session;
+    friend class tcp_session;
   public:
     void start();
     void drain();
 
-  private:
-    void listen();
-    void release(boost::uuids::uuid conn_id);
     void acquire(std::shared_ptr<session> &conn);
+    void release(boost::uuids::uuid conn_id);
 
+    lb_strategy *get_strategy() { return strategy; }
+
+  private:
     void report_stats();
 
-    std::vector<std::string> get_connections() const;
   private:
-    boost::uuids::random_generator gen_uuid;
-
     size_t max_session_count;
-    std::map<boost::uuids::uuid, std::shared_ptr<session>> sessions{};
-    lb_strategy<boost::asio::ip::tcp::endpoint> *strategy;
+    std::map<boost::uuids::uuid, std::shared_ptr<session>> sessions;
+
+    lb_strategy *strategy;
+    session_factory *factory;
 
     boost::asio::io_context::strand strand;
-    boost::asio::ip::tcp::acceptor acceptor;
     boost::asio::deadline_timer timer;
 };
 

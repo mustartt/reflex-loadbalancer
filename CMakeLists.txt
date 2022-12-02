@@ -29,7 +29,7 @@ add_executable(loadbalancer
         include/exceptions/exceptions.h
         src/session_manager.cpp
         include/session_manager.h
-        src/session.cpp
-        include/session.h src/lb_strategy.cpp include/lb_strategy.h)
+        src/sessions/session.cpp
+        include/sessions/session.h src/lb_strategy/lb_strategy.cpp include/lb_strategy/lb_strategy.h include/sessions/tcp_sessions.h include/sessions/udp_sessions.h include/sessions/ssl_sessions.h src/sessions/tcp_session.cpp include/lb_strategy/lb_round_robin_strategy.h include/lb_strategy/pool.h include/sessions/session_factory.h include/sessions/tcp_session_factory.h src/sessions/tcp_session_factory.cpp src/lb_strategy/pool.cpp)
 
 target_link_libraries(loadbalancer ${Boost_LIBRARIES} ${YAML_CPP_LIBRARIES})
